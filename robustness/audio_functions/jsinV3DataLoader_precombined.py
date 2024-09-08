@@ -93,6 +93,7 @@ class jsinV3_precombined_paired(torch.utils.data.ConcatDataset):
     def _rotate_splits(self):
         for dataset in self.datasets:
             dataset._rotate_splits()
+        self.rotate_index += 1 
 
     def class_map(self):
         """
