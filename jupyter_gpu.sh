@@ -6,7 +6,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --time=3:00:00
 #SBATCH --partition=gpu
-#SBATCH --gpus=1
+#SBATCH -N 1
+#SBATCH --gpus=2
 
 module load slurm gcc python3
 

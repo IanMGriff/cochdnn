@@ -55,7 +55,10 @@ class LitAudioSSL(L.LightningModule):
             ])
         
         # init losses 
-        self.mmcr_loss = MMCR_Loss(distributed=False) # comeback to see if distrubuted needs to be true here 
+        # if torch.distributed.is_initialized():
+        #     distributed=True
+
+        self.mmcr_loss = MMCR_Loss(distributed=True) # comeback to see if distrubuted needs to be true here 
         self.lambda_mmcr = self.config['hparas']['lambda_mmcr']
         self.class_loss = nn.CrossEntropyLoss()
 
@@ -72,7 +75,6 @@ class LitAudioSSL(L.LightningModule):
         outs_1 = torch.cat([out_11, out_21], dim=0)
         outs_2 = torch.cat([out_12, out_22], dim=0)
         loss_mmcr = self.mmcr_loss(outs_1, outs_2)
-
         # get classification loss
         class_loss_11 = self.class_loss(logits_11, labels_1)
         class_loss_12 = self.class_loss(logits_12, labels_1)
@@ -141,9 +143,9 @@ class LitAudioSSL(L.LightningModule):
         return self.train_dataloader
     
     def val_dataloader(self):
-        self.val_dataset = jsinV3_precombined_paired(root=self.config['data']['root'], train=False, transform=self.transforms)
+        dataset = jsinV3_precombined_paired(root=self.config['data']['root'], train=False, transform=self.transforms)
         dataloader = torch.utils.data.DataLoader(
-            self.val_dataset,
+            dataset,
             batch_size=self.config['hparas']['batch_size'],
             num_workers=self.config['num_workers'],
             shuffle=False
