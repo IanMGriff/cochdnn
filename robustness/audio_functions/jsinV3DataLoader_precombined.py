@@ -95,6 +95,10 @@ class jsinV3_precombined_paired(torch.utils.data.ConcatDataset):
             dataset._rotate_splits()
         self.rotate_index += 1 
 
+    def _rotate_splits(self):
+        for dataset in self.datasets:
+            dataset._rotate_splits()
+
     def class_map(self):
         """
         Loads the mapping between the word IDX and human readable word map. 
