@@ -2,6 +2,7 @@ import os
 import torch 
 import yaml 
 import pathlib
+import argparse
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 from argparse import ArgumentParser
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     help="Number of CPUs for dataloader. (Default: 0)",
     )
     parser.add_argument('--random_seed', default=0, type=int, help='Random seed for dataset.')
-    parser.add_argument('--resume_training', default=False, help='Resume training from checkpoint.')
+    parser.add_argument('--resume_training', action=argparse.BooleanOptionalAction, help='Resume training from checkpoint.')
     
     args = parser.parse_args()
 

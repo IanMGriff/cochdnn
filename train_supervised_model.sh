@@ -6,7 +6,7 @@
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-gpu=12
 
-#SBATCH --mem=64Gb
+#SBATCH --mem=128Gb
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
 #SBATCH -N 1
@@ -30,5 +30,6 @@ echo "Master: "$master_node" Local node: "$HOSTNAME" GPUs used: "$CUDA_VISIBLE_D
 
 srun python3 lightning_scripts/train.py --config lightning_scripts/configs/word_audioset_resnet50.yaml \
                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
-                                   --exp_dir model_checkpoints
+                                   --exp_dir model_checkpoints \
+                                   --resume_training 
 

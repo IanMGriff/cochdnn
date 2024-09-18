@@ -5,12 +5,12 @@ from torchmetrics.classification import Accuracy
 import torch.nn.functional as F
 import lightning as L
 
-from metrics import calculate_accuracy
 import robustness.audio_models as architectures
 import robustness.audio_functions.audio_transforms as at 
 from robustness.audio_functions.jsinV3_loss_functions import jsinV3_multi_task_loss
 from robustness.audio_functions.audio_input_representations import AUDIO_INPUT_REPRESENTATIONS
-from robustness.audio_functions.jsinV3DataLoader_precombined import jsinV3_precombined_all_signals
+# from robustness.audio_functions.jsinV3DataLoader_precombined import jsinV3_precombined_all_signals
+from jsinV3DataLoader_precombined_batched import jsinV3_precombined_all_signals
 
 class ModelWithFrontEnd(nn.Module):
     def __init__(self,front_end, model):
@@ -106,28 +106,53 @@ class LitWordAudioSetModel(L.LightningModule):
         """
         return self.model(x)
 
+    def collate_fn(self, batch):
+        batch = batch[0] # unbox wrapper added by dataloader 
+        signals = []
+        labels = batch[-1] # labels already collated 
+        # convert labels to torch tensors 
+        if isinstance(labels, dict):
+            for task_key, task_labels in labels.items():
+                labels[task_key] = torch.from_numpy(task_labels)
+        else:
+            labels = torch.from_numpy(labels) 
+        # convert signal and noise into signal
+        for (signal, noise) in  zip(*batch[:2]):
+            signal, _ = self.transforms(signal, noise)
+            signals.append(signal)
+        signals = torch.cat(signals).unsqueeze(1) # add back channel dim
+        return signals, labels 
+
     def train_dataloader(self):
         # set train dataloader as attr so we can rotate examples every epoch 
-        dataset = jsinV3_precombined_all_signals(root=self.config['data']['root'], train=True, transform=self.transforms)
+        dataset = jsinV3_precombined_all_signals(root=self.config['data']['root'],
+                                                 train=True,
+                                                 transform=None, # perform transforms in collate_fn
+                                                 batch_size=self.config['hparas']['batch_size'])
         dataset.target_keys = self.config['data']['target_keys']
         self.train_dataloader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=self.config['hparas']['batch_size'],
+            batch_size=1,
             num_workers=self.config['num_workers'], 
             pin_memory=True,
             # persistent_workers=True,
             shuffle=False,
+            collate_fn=self.collate_fn
         )
         return self.train_dataloader
     
     def val_dataloader(self):
-        dataset = jsinV3_precombined_all_signals(root=self.config['data']['root'], train=False, transform=self.transforms)
+        dataset = jsinV3_precombined_all_signals(root=self.config['data']['root'],
+                                                 train=False,
+                                                 transform=None,
+                                                 batch_size=self.config['hparas']['batch_size'])
         dataset.target_keys = self.config['data']['target_keys']
         dataloader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=self.config['hparas']['batch_size'],
+            batch_size=1,
             num_workers=self.config['num_workers'],
-            shuffle=False
+            shuffle=False,
+            collate_fn=self.collate_fn
         )
         return dataloader
 
