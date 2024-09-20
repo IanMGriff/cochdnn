@@ -7,7 +7,7 @@
 #SBATCH --time=3:00:00
 #SBATCH --partition=gpu
 #SBATCH -N 1
-#SBATCH --gpus=2
+#SBATCH --gpus=1
 
 module load slurm gcc python3
 
