@@ -79,7 +79,7 @@ def cli_main(args):
         devices=args.gpus,
         accelerator="gpu", 
         strategy='ddp',
-        val_check_interval=config['hparas']['valid_step'],
+        # val_check_interval=config['hparas']['valid_step'], # just validate every epoch 
         profiler=None,
         callbacks=callbacks)
     

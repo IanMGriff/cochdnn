@@ -1,10 +1,12 @@
 
 import torch
 from torch import nn
-from torchmetrics.classification import Accuracy 
+from torchmetrics.classification import Accuracy, BinaryAccuracy
 import torch.nn.functional as F
 import lightning as L
 
+import sys
+sys.path.append('../')
 import robustness.audio_models as architectures
 import robustness.audio_functions.audio_transforms as at 
 from robustness.audio_functions.jsinV3_loss_functions import jsinV3_multi_task_loss
@@ -56,10 +58,10 @@ class LitWordAudioSetModel(L.LightningModule):
         self.multi_task_loss = jsinV3_multi_task_loss(task_loss_params=config['hparas']['task_loss_params'],
                                                       batch_size=config['hparas']['batch_size'])
         # get accuracy metrics per task - requires module dict for torchmetrics 
-        self.train_accuracy = torch.nn.ModuleDict({task_key: Accuracy(task="multiclass", num_classes=num_classes) 
+        self.train_accuracy = torch.nn.ModuleDict({task_key: BinaryAccuracy() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
                         for task_key,num_classes in self.config['model']['arch_params']['num_classes'].items()}) 
         
-        self.val_accuracy = torch.nn.ModuleDict({task_key: Accuracy(task="multiclass", num_classes=num_classes) 
+        self.val_accuracy = torch.nn.ModuleDict({task_key: BinaryAccuracy() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
                         for task_key,num_classes in self.config['model']['arch_params']['num_classes'].items()}) 
         
         self.accuracy = {'train': self.train_accuracy, 'val': self.val_accuracy}
@@ -145,7 +147,8 @@ class LitWordAudioSetModel(L.LightningModule):
         dataset = jsinV3_precombined_all_signals(root=self.config['data']['root'],
                                                  train=False,
                                                  transform=None,
-                                                 batch_size=self.config['hparas']['batch_size'])
+                                                 batch_size=self.config['hparas']['batch_size'],
+                                                 eval_max=self.config['data'].get('eval_max', 3))
         dataset.target_keys = self.config['data']['target_keys']
         dataloader = torch.utils.data.DataLoader(
             dataset,

@@ -22,7 +22,10 @@ class jsinV3_precombined_all_signals(torch.utils.data.ConcatDataset):
         if train:
             self.all_hdf5_files = glob.glob(root + '/train_*/' + self.hdf5_glob)
         else:
-            self.all_hdf5_files = glob.glob(root + '/valid_*/' + self.hdf5_glob)[0:eval_max]
+            if eval_max == -1:
+                self.all_hdf5_files = glob.glob(root + '/valid_*/' + self.hdf5_glob)
+            else:
+                self.all_hdf5_files = glob.glob(root + '/valid_*/' + self.hdf5_glob)[0:eval_max]
 
         self.datasets = [H5Dataset(h5_file, transform, self.target_keys, batch_size) for h5_file in self.all_hdf5_files]
 

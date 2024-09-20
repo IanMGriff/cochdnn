@@ -12,8 +12,8 @@ audio_transforms:
   dbspl: 60
 
 val_metric:
-    word_task: 'signal/word_int'
-    audioset_task: 'noise/labels_binary_via_int'
+    word_task: 'val_signal/word_int_acc'
+    audioset_task: 'val_noise/labels_binary_via_int_acc'
 
 hparas:                                   # Experiment hyper-parameters
   epochs: 6                               # Each "epoch" is 25 passes through the speech dataset
