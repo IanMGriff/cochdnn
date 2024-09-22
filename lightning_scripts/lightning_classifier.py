@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import lightning as L
 
 import sys
-sys.path.append('../')
 import robustness.audio_models as architectures
 import robustness.audio_functions.audio_transforms as at 
 from robustness.audio_functions.jsinV3_loss_functions import jsinV3_multi_task_loss
@@ -20,9 +19,9 @@ class ModelWithFrontEnd(nn.Module):
         self.front_end = front_end
         self.model = model
 
-    def forward(self, x):
+    def forward(self, x, with_latent=False, fake_relu=False, no_relu=False):
         x, _ = self.front_end(x, None)
-        return self.model(x)
+        return self.model(x,  with_latent=with_latent, fake_relu=fake_relu, no_relu=no_relu)
 
 class LitWordAudioSetModel(L.LightningModule):
     def __init__(self, config):
@@ -44,6 +43,23 @@ class LitWordAudioSetModel(L.LightningModule):
 
         # Get audio model from config kwargs
         self.model = architectures.__dict__[self.config['model']['arch_name']](**self.config['model']['arch_params'])
+
+        # Resnet50 Layers Used for Metamer Generation - should work for all resnets 
+        self.metamer_layers = [
+            'input_after_preproc',
+            'conv1',
+            'bn1',
+            'conv1_relu1',
+            'maxpool1',
+            'layer1',
+            'layer2',
+            'layer3',
+            'layer4',
+            'avgpool',
+            'final/signal/word_int',
+            'final/signal/speaker_int',
+            'final/noise/labels_binary_via_int',
+        ]
 
         if config['audio_rep']['on_gpu']:
             # If computing rep on gpu, compose rep and model in same forward pass for convenience
