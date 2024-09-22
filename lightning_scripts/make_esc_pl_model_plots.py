@@ -47,7 +47,7 @@ def preproc_sound_np(sound):
         sound_rms = 1
     sound = sound/sound_rms*0.1
     sound = np.expand_dims(sound, 0)
-    sound = ch.from_numpy(sound).float().cuda()
+    sound = ch.from_numpy(sound).float().cuda().unsqueeze(0)
     return sound
 
 def get_train_and_test(left_out_fold, data_path, fold_info_path, num_reps, SEED):
@@ -389,17 +389,19 @@ def save_activations(data_paths, model, net_name, layer, num_reps, SEED,
             # sound, SR = synthhelpers.load_audio_wav_resample(audio_path, 
             #                                                  resample_SR=20000, 
             #                                                  START_SECS='random')
-
             sound, SR = audio_helpers.load_audio_wav_resample(audio_path, 
                                                              resample_SR=20000, 
-                                                             START_SECS='random')
-            while sum(sound)==0: # If sound is silent, choose a new clip
+                                                             START_SECS='random',
+                                                             as_float32=True)
+
+            while sum(sound)==0: # If sound is silent, choose a new clip       
                 # sound, SR = synthhelpers.load_audio_wav_resample(audio_path, 
                 #                                                  resample_SR=20000, 
                 #                                                  START_SECS='random')
                 sound, SR = audio_helpers.load_audio_wav_resample(audio_path, 
                                                                  resample_SR=20000, 
-                                                                 START_SECS='random')
+                                                                 START_SECS='random',
+                                                                 as_float32=True)
             sound_array.append(preproc_sound_np(sound)) # normalize
 
         sound = sound_array
@@ -407,7 +409,7 @@ def save_activations(data_paths, model, net_name, layer, num_reps, SEED,
         all_activations = []
         for clip in sound:
             with ch.no_grad():
-                (predictions, rep, all_outputs), orig = model(clip, with_latent=True, fake_relu=True)
+                predictions, rep, all_outputs = model(clip, with_latent=True, fake_relu=True)
             if len(layer.split('/'))>=2:
                 split_layer = layer.split('/')
                 print(split_layer[0])
@@ -591,7 +593,7 @@ def get_predictions_and_make_plots(model, net_name, scratch_activations_dir,
     print("'all_svcs': (list) SVM parameters learned.")
 
     # get target-category mapping so it's in saved_vars.pickle
-    fold_info_path = '/om4/group/mcdermott/user/michl/ESC-50-master/meta/esc50.csv'
+    fold_info_path = '/mnt/ceph/users/igriffith/datasets/ESC-50-master/meta/esc50.csv'
     df = pandas.read_csv(fold_info_path)
     target_to_category = {}
     while len(target_to_category)<50:
