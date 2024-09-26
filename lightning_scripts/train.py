@@ -1,6 +1,7 @@
 import os 
 import torch 
 import yaml 
+import pickle 
 import pathlib
 import argparse
 import lightning as L
@@ -16,7 +17,18 @@ torch.backends.cudnn.allow_tf32 = True
 def cli_main(args):
     L.seed_everything(args.random_seed)
 
-    config_path = pathlib.Path(args.config_path)
+
+    if args.config_path != "":
+        config_path = pathlib.Path(args.config_path)
+
+
+    else:
+        with open(args.config_list, 'rb') as f:
+            model_config = pickle.load(f)
+        config_path = pathlib.Path(model_config[args.array_id])
+
+    print(config_path)
+
     config = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
     # set num_workers from cl args as total workers // gpus 
     config['num_workers'] = args.num_workers // args.gpus
@@ -79,6 +91,7 @@ def cli_main(args):
         devices=args.gpus,
         accelerator="gpu", 
         strategy='ddp',
+        gradient_clip_val=1, # clipt grad l2 norm to 1 
         # val_check_interval=config['hparas']['valid_step'], # just validate every epoch 
         profiler=None,
         callbacks=callbacks)
@@ -89,6 +102,8 @@ def cli_main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--config_path', default='', type=str, help='Path to experiment config.')
+    parser.add_argument('--config_list', type=str, help='Path to list of config files.')
+    parser.add_argument('--array_id', type=int, help='Index into the config list specifying which one to use.')
     parser.add_argument(
         "--exp_dir",
         default=pathlib.Path("./exp"),

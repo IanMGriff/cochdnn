@@ -740,8 +740,9 @@ if __name__ == '__main__':
     # model, ds, metamer_layers = build_network.main(return_metamer_layers=True)
     print("Layer name: "+str(metamer_layers[args.LAYER_IDX]))
     model = model.cuda()
-    net_path = os.getcwd()
-    net_name = '-'.join(net_path.split('/')[-2:])
+    # net_path = os.getcwd()
+    # net_name = '-'.join(net_path.split('/')[-2:])
+    net_name = config_path.stem # model name is stem of yaml config 
     get_predictions_and_make_plots(model, net_name,
                                    scratch_activations_dir=args.SCRATCH_DIR,
                                    layer=metamer_layers[args.LAYER_IDX],

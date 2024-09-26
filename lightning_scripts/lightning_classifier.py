@@ -1,7 +1,7 @@
 
 import torch
 from torch import nn
-from torchmetrics.classification import Accuracy, BinaryAccuracy
+from torchmetrics.classification import Accuracy, BinaryPrecision
 import torch.nn.functional as F
 import lightning as L
 
@@ -74,10 +74,10 @@ class LitWordAudioSetModel(L.LightningModule):
         self.multi_task_loss = jsinV3_multi_task_loss(task_loss_params=config['hparas']['task_loss_params'],
                                                       batch_size=config['hparas']['batch_size'])
         # get accuracy metrics per task - requires module dict for torchmetrics 
-        self.train_accuracy = torch.nn.ModuleDict({task_key: BinaryAccuracy() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
+        self.train_accuracy = torch.nn.ModuleDict({task_key: BinaryPrecision() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
                         for task_key,num_classes in self.config['model']['arch_params']['num_classes'].items()}) 
         
-        self.val_accuracy = torch.nn.ModuleDict({task_key: BinaryAccuracy() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
+        self.val_accuracy = torch.nn.ModuleDict({task_key: BinaryPrecision() if 'binary' in task_key else Accuracy(task="multiclass", num_classes=num_classes) 
                         for task_key,num_classes in self.config['model']['arch_params']['num_classes'].items()}) 
         
         self.accuracy = {'train': self.train_accuracy, 'val': self.val_accuracy}
@@ -89,8 +89,11 @@ class LitWordAudioSetModel(L.LightningModule):
         logits = self.model(audio)
       
         # get classification loss
-        loss = self.multi_task_loss(logits, label_dict)
-        # add losses to log
+        loss, task_loss_dict = self.multi_task_loss(logits, label_dict, return_indiv_loss=True)
+        # add task loss to log
+        for task, task_loss in task_loss_dict.items():
+                self.log(f"{step_type}_{task}_loss", task_loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
+
         self.log(f"{step_type}_loss", loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
   
         # calc acc 

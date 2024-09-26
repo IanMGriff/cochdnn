@@ -28,8 +28,7 @@ num_gpus=$(( $(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))
 echo "Master: "$master_node" Local node: "$HOSTNAME" GPUs used: "$CUDA_VISIBLE_DEVICES" Total GPUs on that node: "$num_gpus" CPUs per node: "$SLURM_JOB_CPUS_PER_NODE
 
 
-
-srun python3 lightning_scripts/train.py --config lightning_scripts/configs/word_audioset_resnet50_lower_lr.yaml \
+srun python3 lightning_scripts/train.py --config_path lightning_scripts/configs/word_resnet50.yaml \
                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
                                    --exp_dir model_checkpoints \
                                    --resume_training 

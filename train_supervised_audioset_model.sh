@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=train_supervised
-#SBATCH --output=outLogs/train_word_supervised_%j.out
-#SBATCH --error=outLogs/train_word_supervised_%j.err
+#SBATCH --output=outLogs/train_audioset_supervised_%j.out
+#SBATCH --error=outLogs/train_audioset_supervised_%j.err
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-gpu=12
@@ -28,8 +28,7 @@ num_gpus=$(( $(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))
 echo "Master: "$master_node" Local node: "$HOSTNAME" GPUs used: "$CUDA_VISIBLE_DEVICES" Total GPUs on that node: "$num_gpus" CPUs per node: "$SLURM_JOB_CPUS_PER_NODE
 
 
-
-srun python3 lightning_scripts/train.py --config lightning_scripts/configs/word_audioset_resnet50_lower_lr.yaml \
+srun python3 lightning_scripts/train.py --config_path lightning_scripts/configs/audioset_resnet50.yaml \
                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
                                    --exp_dir model_checkpoints \
                                    --resume_training 
