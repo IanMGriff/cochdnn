@@ -701,6 +701,8 @@ if __name__ == '__main__':
                         help='C parameters to sweep over for SVM with cross validation')
     parser.add_argument('-O', '--OVERWRITE', action='store_true', help='If set, overwrites saved activations.')
     parser.add_argument('--config_path', default="", type=str, help='Config for model')
+    parser.add_argument('--config_list_path', default='', type=str, help='Path to experiment config.')
+    parser.add_argument('--array_ix', default=0, type=int, help='Slurm job array index')
     parser.add_argument(
         "--model_ckpt_dir",
         default=Path("./model_checkpoints"),
@@ -722,7 +724,14 @@ if __name__ == '__main__':
     except FileExistsError:
         pass
     
-    config_path = Path(args.config_path)
+    if args.config_path != "":
+        config_path = Path(args.config_path)
+    elif args.config_list_path != "":
+        with open(args.config_list_path, 'rb') as f:
+            config_dict = pckl.load(f)
+            config_path = Path(config_dict[args.array_ix])
+            
+    print(f"Evaluating config: {config_path}")
     config = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
 
     if args.ckpt_path == "":

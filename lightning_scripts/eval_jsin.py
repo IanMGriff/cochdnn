@@ -2,6 +2,7 @@ import torch
 import lightning as L
 import yaml
 import sys, os
+import pickle
 from lightning_scripts.lightning_classifier import LitWordAudioSetModel 
 from pathlib import Path 
 import pathlib
@@ -14,7 +15,14 @@ torch.backends.cudnn.allow_tf32 = True
 def cli_main(args):
     L.seed_everything(args.random_seed)
 
-    config_path = pathlib.Path(args.config_path)
+    if args.config_path != "":
+        config_path = pathlib.Path(args.config_path)
+    elif args.config_list_path != "":
+        with open(args.config_list_path, 'rb') as f:
+            config_dict = pickle.load(f)
+            config_path = pathlib.Path(config_dict[args.array_ix])
+
+    print(f"Evaluating config: {config_path}")
     config = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
 
     config['num_workers'] = args.num_workers
@@ -37,6 +45,7 @@ def cli_main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--config_path', default='', type=str, help='Path to experiment config.')
+    parser.add_argument('--config_list_path', default='', type=str, help='Path to experiment config.')
     parser.add_argument(
         "--model_ckpt_dir",
         default=pathlib.Path("./model_checkpoints"),
@@ -68,6 +77,7 @@ if __name__ == "__main__":
     help="Number of CPUs for dataloader. (Default: 0)",
     )
     parser.add_argument('--random_seed', default=0, type=int, help='Random seed')
+    parser.add_argument('--array_ix', default=0, type=int, help='Slurm job array index')
     args = parser.parse_args()
 
     cli_main(args)

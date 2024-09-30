@@ -2,12 +2,12 @@
 #SBATCH --job-name=jupyter_notebook
 #SBATCH --output=outLogs/notebook_%j.out
 #SBATCH --error=outLogs/notebook_%j.err
-#SBATCH --mem=8Gb
-#SBATCH --cpus-per-task=4
+#SBATCH --mem=2Gb
+#SBATCH --cpus-per-task=1
 #SBATCH --time=3:00:00
 #SBATCH --partition=gpu
 #SBATCH -N 1
-#SBATCH --gpus=2
+#SBATCH --gpus=1
 
 module load slurm gcc python3
 
