@@ -10,7 +10,7 @@
 #SBATCH --partition=gpu
 #SBATCH -N 1
 #SBATCH --constraint=h100  # if you want a particular type of GPU
-#SBATCH --array=1-7 #0-7 for current 
+##SBATCH --array=1-7 #0-7 for current 
 
 module load cuda cudnn nccl
 
@@ -33,14 +33,15 @@ echo "Master: "$master_node" Local node: "$HOSTNAME" GPUs used: "$CUDA_VISIBLE_D
 #                                    --model_ckpt_dir model_checkpoints \
 #                                    --batch_size 192
 
-# python3 lightning_scripts/eval_jsin.py --config lightning_scripts/configs/word_audioset_resnet50_lower_lr_slower_schedule_lower_task_weight.yaml \
-#                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
-#                                    --model_ckpt_dir model_checkpoints \
-#                                    --batch_size 192
-
-python3 lightning_scripts/eval_jsin.py --config_list_path eval_config_manifests/all_config_eval_list_09_2024.pkl \
+python3 lightning_scripts/eval_jsin.py --config_path model_configs/word_audioset_resnet50_lower_lr_slower_schedule_5.yaml \
                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
                                    --model_ckpt_dir model_checkpoints \
                                    --batch_size 192 \
-                                   --array_ix $SLURM_ARRAY_TASK_ID
+                                   --ckpt_path model_checkpoints/word_audioset_resnet50_lower_lr_slower_schedule_5/checkpoints/epoch=5-step=45300-best_word_task.ckpt
+
+# python3 lightning_scripts/eval_jsin.py --config_list_path eval_config_manifests/all_config_eval_list_09_2024.pkl \
+#                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
+#                                    --model_ckpt_dir model_checkpoints \
+#                                    --batch_size 192 \
+#                                    --array_ix $SLURM_ARRAY_TASK_ID
 

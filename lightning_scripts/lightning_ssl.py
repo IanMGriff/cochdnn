@@ -58,9 +58,12 @@ class LitAudioSSL(L.LightningModule):
         # if torch.distributed.is_initialized():
         #     distributed=True
 
+        self.ssl_task = self.config['hparas']['ssl_task']
         self.mmcr_loss = MMCR_Loss(distributed=True) # comeback to see if distrubuted needs to be true here 
         self.lambda_mmcr = self.config['hparas']['lambda_mmcr']
-        self.class_loss = nn.CrossEntropyLoss()
+        self.opt_supervised_task = self.config['model']['arch_kwargs']['supervised']
+        if self.opt_supervised_task:
+            self.class_loss = nn.CrossEntropyLoss()
 
     def _step(self, batch, batch_idx, step_type):
         spec_11, spec_12, spec_21, spec_22, labels_1, labels_2 = batch
@@ -74,16 +77,23 @@ class LitAudioSSL(L.LightningModule):
         # concat pairs with same equivariances and get mmcr los
         outs_1 = torch.cat([out_11, out_21], dim=0)
         outs_2 = torch.cat([out_12, out_22], dim=0)
+        
         loss_mmcr = self.mmcr_loss(outs_1, outs_2)
+        self.log(f"{step_type}_mmcr_loss", loss_mmcr.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
+
+        class_loss = 0 
+        if self.opt_supervised_task:
         # get classification loss
-        class_loss_11 = self.class_loss(logits_11, labels_1)
-        class_loss_12 = self.class_loss(logits_12, labels_1)
-        class_loss_21 = self.class_loss(logits_21, labels_2)
-        class_loss_22 = self.class_loss(logits_22, labels_2)
-        class_loss = class_loss_11 + class_loss_12 + class_loss_21 + class_loss_22
-        class_loss = class_loss / 4.0
+            class_loss_11 = self.class_loss(logits_11, labels_1)
+            class_loss_12 = self.class_loss(logits_12, labels_1)
+            class_loss_21 = self.class_loss(logits_21, labels_2)
+            class_loss_22 = self.class_loss(logits_22, labels_2)
+            class_loss = class_loss_11 + class_loss_12 + class_loss_21 + class_loss_22
+            class_loss = class_loss / 4.0
+            self.log(f"{step_type}_class_loss", class_loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
         total_loss = self.lambda_mmcr * loss_mmcr + class_loss
+        self.log(f"{step_type}_total_loss", total_loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
         # calc acc 
         acc = 0 
@@ -92,14 +102,10 @@ class LitAudioSSL(L.LightningModule):
         acc += calculate_accuracy(logits_21, labels_2).item()
         acc += calculate_accuracy(logits_22, labels_2).item()
         acc /= 4  
+        self.log(f"{step_type}_class_acc", acc, on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
-        # add losses to log
-        self.log(f"{step_type}_class_loss", class_loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
-        self.log(f"{step_type}_mmcr_loss", loss_mmcr.detach(), on_step=True, on_epoch=False, prog_bar=True)
-        self.log(f"{step_type}_total_loss", total_loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
 
         # add acc to log 
-        self.log(f"{step_type}_class_acc", acc, on_step=True, on_epoch=False, prog_bar=True)
         return total_loss
 
     def training_step(self, batch, batch_idx):

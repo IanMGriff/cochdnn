@@ -29,13 +29,13 @@ echo "Master: "$master_node" Local node: "$HOSTNAME" GPUs used: "$CUDA_VISIBLE_D
 
 
 
-srun python3 lightning_scripts/train.py --config_path model_configs/word_resnet50_orig_lr.yaml \
-                                   --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
-                                   --exp_dir model_checkpoints \
-                                   --resume_training 
-
-# srun python3 lightning_scripts/train.py --config_path model_configs/word_audioset_resnet50_lower_lr_slower_schedule_5.yaml \
+# srun python3 lightning_scripts/train.py --config lightning_scripts/configs/word_audioset_resnet50_lower_lr.yaml \
 #                                    --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
 #                                    --exp_dir model_checkpoints \
 #                                    --resume_training 
+
+srun python3 lightning_scripts/train.py --config_path model_configs/ssl_word_resnet50.yaml \
+                                   --gpus $num_gpus --num_workers $SLURM_JOB_CPUS_PER_NODE \
+                                   --exp_dir model_checkpoints \
+                                   --resume_training 
 

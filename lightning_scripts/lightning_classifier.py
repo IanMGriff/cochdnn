@@ -92,14 +92,14 @@ class LitWordAudioSetModel(L.LightningModule):
         loss, task_loss_dict = self.multi_task_loss(logits, label_dict, return_indiv_loss=True)
         # add task loss to log
         for task, task_loss in task_loss_dict.items():
-                self.log(f"{step_type}_{task}_loss", task_loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
+                self.log(f"{step_type}_{task}_loss", task_loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
-        self.log(f"{step_type}_loss", loss.detach(), on_step=True, on_epoch=False, prog_bar=True)
+        self.log(f"{step_type}_loss", loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
   
         # calc acc 
         for task, task_logits in logits.items():
             task_acc = self.accuracy[step_type][task](task_logits, label_dict[task])
-            self.log(f"{step_type}_{task}_acc", task_acc, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(f"{step_type}_{task}_acc", task_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
         return loss
 

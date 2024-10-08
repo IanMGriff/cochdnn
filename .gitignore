@@ -23,6 +23,7 @@ ipython_config.py
 # data and log directory
 outLogs
 lightning_logs/
+esc_analysis
 
 # data
 *.npy

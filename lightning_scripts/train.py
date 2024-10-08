@@ -43,7 +43,7 @@ def cli_main(args):
     checkpoint_dir = args.exp_dir / f"{config_path.stem}/checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     ckpt_paths = sorted(checkpoint_dir.glob("*.ckpt"), key=os.path.getctime)
-
+    ckpt_path=None
     if args.resume_training and len(ckpt_paths) != 0:
         ckpt_path = ckpt_paths[-1]
         model = module.load_from_checkpoint(checkpoint_path=ckpt_path, config=config)
@@ -61,7 +61,7 @@ def cli_main(args):
                 monitor=value,
                 mode="max",
                 save_top_k=1,
-                save_weights_only=True,
+                # save_weights_only=True,
                 verbose=True,
             ))
     else:
@@ -96,7 +96,7 @@ def cli_main(args):
         profiler=None,
         callbacks=callbacks)
     
-    trainer.fit(model)
+    trainer.fit(model, ckpt_path=ckpt_path if args.resume_training else None)
 
 
 if __name__ == "__main__":
