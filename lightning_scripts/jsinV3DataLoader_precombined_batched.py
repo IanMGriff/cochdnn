@@ -256,11 +256,23 @@ class H5DatasetPaired(torch.utils.data.Dataset):
 
         # Transforms will take in the signal and the noise source for this dataset
         # If no transform, just return the speech with no background
+        signal_11, signal_12, signal_21, signal_22 = [], [], [], []
         if self.transform is not None:
-            signal_11, noise = self.transform(signal_1, noise_1)
-            signal_12, noise = self.transform(signal_1, noise_2)
-            signal_21, noise = self.transform(signal_2, noise_1)
-            signal_22, noise = self.transform(signal_2, noise_2)
+            for ix in range(self.batch_size):
+                signal_11_i, noise = self.transform(signal_1[ix], noise_1[ix])
+                signal_12_i, noise = self.transform(signal_1[ix], noise_2[ix])
+                signal_21_i, noise = self.transform(signal_2[ix], noise_1[ix])
+                signal_22_i, noise = self.transform(signal_2[ix], noise_2[ix])
+                signal_11.append(signal_11_i)
+                signal_12.append(signal_12_i)
+                signal_21.append(signal_21_i)
+                signal_22.append(signal_22_i)
+
+        signal_11 = torch.cat(signal_11, dim=0)
+        signal_12 = torch.cat(signal_12, dim=0)
+        signal_21 = torch.cat(signal_21, dim=0)
+        signal_22 = torch.cat(signal_22, dim=0)
+
         if len(self.target_keys) == 1:
             target_paths = self.target_keys[0].split('/')
             target_1 = self.dataset['sources'][target_paths[0]][target_paths[1]][self.split_1[start:end]]

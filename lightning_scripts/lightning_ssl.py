@@ -5,9 +5,16 @@ import torchvision
 import torch.nn.functional as F
 import lightning as L
 
-import architectures
-from metrics import calculate_accuracy
-from loss_functions import MMCR_Loss
+from . import architectures
+from .metrics import calculate_accuracy
+from .loss_functions import MMCR_Loss as Dual_MMCR_Loss
+import audio_ssl.losses as ssl_losses 
+
+from audio_ssl.misc import LARS, CosineWarmupScheduler
+from typing import List, Union, Tuple
+from pprint import pprint
+# from composer.optim.scheduler import CosineAnnealingWithWarmupScheduler
+
 import robustness.audio_functions.audio_transforms as at 
 from robustness.audio_functions.jsinV3DataLoader_precombined import jsinV3_precombined_paired
 from robustness.audio_functions.audio_input_representations import AUDIO_INPUT_REPRESENTATIONS
@@ -26,6 +33,7 @@ class ModelWithFrontEnd(nn.Module):
 class LitAudioSSL(L.LightningModule):
     def __init__(self, config):
         super().__init__()
+        self.save_hyperparameters()
         self.config = config 
 
         # Init audio transforms 
@@ -56,11 +64,15 @@ class LitAudioSSL(L.LightningModule):
         
         # init losses 
         # if torch.distributed.is_initialized():
-        #     distributed=True
-
+        distributed = torch.distributed.is_initialized()
         self.ssl_task = self.config['hparas']['ssl_task']
-        self.mmcr_loss = MMCR_Loss(distributed=True) # comeback to see if distrubuted needs to be true here 
-        self.lambda_mmcr = self.config['hparas']['lambda_mmcr']
+        if self.ssl_task == 'dual':
+            self.ssl_loss = Dual_MMCR_Loss(distributed=distributed) # comeback to see if distrubuted needs to be true here 
+        else:
+            self.ssl_loss = ssl_losses.__dict__[self.config['hparas']['ssl_loss']](**self.config['hparas']['ssl_loss_kwargs'], distributed=distributed)
+        self.ssl_loss_str = self.config['hparas']['ssl_loss_str'] # str for logs 
+        # scaling factor to apply to self-supervised task loss - default is 1.
+        self.lambda_ssl = self.config['hparas'].get('lambda_ssl', 1.0)
         self.opt_supervised_task = self.config['model']['arch_kwargs']['supervised']
         if self.opt_supervised_task:
             self.class_loss = nn.CrossEntropyLoss()
@@ -74,14 +86,33 @@ class LitAudioSSL(L.LightningModule):
         _, out_21, logits_21 = self.model(spec_21)
         _, out_22, logits_22 = self.model(spec_22)
 
-        # concat pairs with same equivariances and get mmcr los
-        outs_1 = torch.cat([out_11, out_21], dim=0)
-        outs_2 = torch.cat([out_12, out_22], dim=0)
-        
-        loss_mmcr = self.mmcr_loss(outs_1, outs_2)
-        self.log(f"{step_type}_mmcr_loss", loss_mmcr.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
+        ## concat reps based on task 
+        if self.ssl_task == 'dual':
+            # concat pairs with same equivariances and get dual mmcr loss
+            outs_1 = torch.cat([out_11, out_21], dim=0)
+            outs_2 = torch.cat([out_12, out_22], dim=0)
+            loss_ssl = self.ssl_loss(outs_1, outs_2)
 
-        class_loss = 0 
+        else:
+            if self.ssl_task == 'word':
+                # group word pairs as augmentations
+                outs_1 =  torch.stack([out_11, out_12], dim=1)
+                outs_2 =  torch.stack([out_21, out_22], dim=1)
+                # stack 1x and 2x along batch dimensions 
+                outs = torch.cat([outs_1, outs_2])
+
+            elif self.ssl_task == 'audioset':
+                # group audioset pairs as augmentations
+                outs_1 =  torch.stack([out_11, out_21], dim=1)
+                outs_2 =  torch.stack([out_12, out_22], dim=1)
+                # stack x1 and x2 along batch dimensions 
+                outs = torch.cat([outs_1, outs_2])
+
+            loss_ssl, _  = self.ssl_loss(outs) 
+
+        self.log(f"{step_type}_{self.ssl_loss_str}_loss", loss_ssl.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
+
+        class_loss = 0.0
         if self.opt_supervised_task:
         # get classification loss
             class_loss_11 = self.class_loss(logits_11, labels_1)
@@ -92,7 +123,7 @@ class LitAudioSSL(L.LightningModule):
             class_loss = class_loss / 4.0
             self.log(f"{step_type}_class_loss", class_loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
-        total_loss = self.lambda_mmcr * loss_mmcr + class_loss
+        total_loss = self.lambda_ssl * loss_ssl + class_loss
         self.log(f"{step_type}_total_loss", total_loss.detach(), on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
         # calc acc 
@@ -101,7 +132,7 @@ class LitAudioSSL(L.LightningModule):
         acc += calculate_accuracy(logits_12, labels_1).item()
         acc += calculate_accuracy(logits_21, labels_2).item()
         acc += calculate_accuracy(logits_22, labels_2).item()
-        acc /= 4  
+        acc /= 4.0  
         self.log(f"{step_type}_class_acc", acc, on_step=True, on_epoch=False, prog_bar=True, sync_dist=True)
 
 
@@ -120,8 +151,37 @@ class LitAudioSSL(L.LightningModule):
 
     def configure_optimizers(self):
         # Optimizer
-        opt = getattr(torch.optim, self.config['hparas']['optimizer'])
-        self.optimizer = opt(self.model.parameters(), lr=self.config['hparas']['lr'])      
+        if self.config['hparas']['optimizer'] == "LARS":
+            # lr = self.config['hparas']['lr'] * self.config['hparas']['batch_size']  / 256 
+            # if self.ssl_task == 'word' or self.ssl_task == 'audioset':
+            #     lr = lr * 2 # batch size is double here 
+            self.optimizer = LARS(
+                            self.model.parameters(),
+                            lr=0,
+                            weight_decay=1e-6,
+                            momentum=0.9,
+                            weight_decay_filter=True,
+                            lars_adaptation_filter=True,
+                        )
+            total_training_steps = self.total_training_steps()
+            num_warmup_steps = self.compute_warmup(total_training_steps, self.config['hparas']['num_warmup_steps_or_ratio'])
+            lr_scheduler = CosineWarmupScheduler(
+                optimizer=self.optimizer,
+                batch_size=self.config['hparas']['batch_size'], # is scaled to per-device batch size
+                warmup_steps=num_warmup_steps,
+                max_steps=total_training_steps,
+                lr=self.config['hparas']['lr']
+            )
+            return [self.optimizer], [
+                {
+                    'scheduler': lr_scheduler,  # The LR scheduler instance (required)
+                    'interval': 'step',  # The unit of the scheduler's step size
+                }
+            ]                                                
+
+        else:
+            opt = getattr(torch.optim, self.config['hparas']['optimizer'])
+            self.optimizer = opt(self.model.parameters(), lr=self.config['hparas']['lr'])      
         return [self.optimizer]
 
     def forward(self, x):
@@ -137,8 +197,10 @@ class LitAudioSSL(L.LightningModule):
 
     def train_dataloader(self):
         # set train dataloader as attr so we can rotate examples every epoch 
-        dataset = jsinV3_precombined_paired(root=self.config['data']['root'], train=True, transform=self.transforms)
-        self.train_dataloader = torch.utils.data.DataLoader(
+        dataset = jsinV3_precombined_paired(root=self.config['data']['root'],
+                                            train=True,
+                                            transform=self.transforms)
+        train_dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=self.config['hparas']['batch_size'],
             num_workers=self.config['num_workers'], 
@@ -146,10 +208,12 @@ class LitAudioSSL(L.LightningModule):
             # persistent_workers=True,
             shuffle=False,
         )
-        return self.train_dataloader
+        return train_dataloader
     
     def val_dataloader(self):
-        dataset = jsinV3_precombined_paired(root=self.config['data']['root'], train=False, transform=self.transforms)
+        dataset = jsinV3_precombined_paired(root=self.config['data']['root'],
+                                            train=False,
+                                            transform=self.transforms)
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=self.config['hparas']['batch_size'],
@@ -158,3 +222,20 @@ class LitAudioSSL(L.LightningModule):
         )
         return dataloader
 
+    # @property
+    def total_training_steps(self) -> int:
+        dataset_size = len(self.train_dataloader())
+        # pprint(vars(self.trainer))
+        # print(self.trainer.num_gpus)
+
+        # num_devices = self.trainer.devices if self.trainer.devices else self.trainer.num_processes
+        num_devices = self.config['num_gpus']
+        effective_batch_size = self.trainer.accumulate_grad_batches * num_devices
+        max_estimated_steps = (dataset_size // effective_batch_size) * self.trainer.max_epochs
+
+        if self.trainer.max_steps and self.trainer.max_steps < max_estimated_steps:
+            return self.trainer.max_steps
+        return max_estimated_steps
+
+    def compute_warmup(self, num_training_steps: int, num_warmup_steps: Union[int, float]) -> int:
+        return num_warmup_steps * num_training_steps if isinstance(num_warmup_steps, float) else num_training_steps
